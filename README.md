@@ -1,2 +1,2 @@
 
-https://stanislawws.github.io/lia-shoper/local_inventory.xml
+https://stanislawws.github.io/lia-shoper-marspaw/local_inventory.xml
