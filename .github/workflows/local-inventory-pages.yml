@@ -1,0 +1,69 @@
+name: Build & Publish Local Inventory (Pages)
+
+on:
+  schedule:
+    - cron: '30 3 * * *'   # codziennie 03:30 UTC (~05:30 PL)
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+    paths:
+      - 'tools/**'
+      - '.github/workflows/local-inventory-pages.yml'
+      - 'README.md'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: "Debug: HEAD + first bytes from source feed"
+        env:
+          SOURCE_FEED_URL: ${{ secrets.SOURCE_FEED_URL }}
+        run: |
+          URL="$SOURCE_FEED_URL"
+          if ! [[ "$URL" =~ ^https?:// ]]; then URL="https://$URL"; fi
+          echo "Checking URL: $URL"
+          echo "---- HEAD ----"
+          curl -I -L --max-time 60 "$URL" || true
+          echo "---- FIRST 500 BYTES ----"
+          curl -L --max-time 60 -sS "$URL" | head -c 500 | sed -e 's/[[:cntrl:]]//g' || true
+          echo
+          echo "---- END ----"
+
+      - name: Build feeds
+        env:
+          SOURCE_FEED_URL: ${{ secrets.SOURCE_FEED_URL }}
+          STORE_CODE: ${{ secrets.STORE_CODE }}
+          DEFAULT_AVAILABILITY: in_stock
+          OUT_BASENAME: local_inventory
+        run: |
+          python tools/build_local_inventory.py
+
+      - name: Upload artifact to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
